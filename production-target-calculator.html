@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Assembly Line Production Target Calculator</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Barlow+Condensed:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e1117;
+    --bg2: #161b24;
+    --bg3: #1d2535;
+    --border: rgba(255,255,255,0.07);
+    --border-mid: rgba(255,255,255,0.13);
+    --accent: #f5a623;
+    --accent2: #e8c547;
+    --text: #e8eaf0;
+    --text2: #8892a4;
+    --text3: #5a6478;
+    --green: #3ecf8e;
+    --blue: #4a9eff;
+    --red: #ff5c5c;
+    --purple: #b88cff;
+    --mono: 'DM Mono', monospace;
+    --display: 'Barlow Condensed', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--display); background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none; z-index: 0;
+  }
+  .page { position: relative; z-index: 1; max-width: 1300px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+  /* Header */
+  .header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 2.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border-mid); flex-wrap: wrap; gap: 1rem; }
+  .eyebrow { font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; color: var(--accent); text-transform: uppercase; margin-bottom: 6px; }
+  h1 { font-family: var(--display); font-size: 42px; font-weight: 700; letter-spacing: -0.01em; line-height: 1; color: var(--text); }
+  h1 span { color: var(--accent); }
+  .header-meta { font-family: var(--mono); font-size: 11px; color: var(--text3); margin-top: 8px; }
+  .status-pill { display: flex; align-items: center; gap: 6px; background: rgba(62,207,142,0.08); border: 1px solid rgba(62,207,142,0.2); border-radius: 20px; padding: 6px 14px; font-family: var(--mono); font-size: 11px; color: var(--green); }
+  .status-pill::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;}50%{opacity:0.3;} }
+
+  .main-grid { display: grid; grid-template-columns: 1fr; gap: 1.25rem; }
+
+  /* Panels */
+  .panel { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .panel-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.02); }
+  .panel-header-left { display: flex; align-items: center; gap: 10px; }
+  .panel-icon { width: 24px; height: 24px; border-radius: 6px; background: rgba(245,166,35,0.15); display: flex; align-items: center; justify-content: center; }
+  .panel-icon svg { width: 13px; height: 13px; fill: var(--accent); }
+  .panel-title { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text2); }
+  .panel-body { padding: 18px; }
+
+  .shift-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+  .field label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); margin-bottom: 6px; }
+  .field select, .field input[type="number"] { width: 100%; background: var(--bg3); border: 1px solid var(--border-mid); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: 13px; padding: 9px 12px; appearance: none; -webkit-appearance: none; outline: none; transition: border-color 0.15s; }
+  .field select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%235a6478'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 30px; cursor: pointer; }
+  .field select:focus, .field input:focus { border-color: var(--accent); }
+  .field select option { background: #1d2535; }
+  .field-hint { font-family: var(--mono); font-size: 10px; color: var(--text3); margin-top: 5px; }
+
+  /* Product lines */
+  .product-lines { display: flex; flex-direction: column; gap: 10px; }
+
+  /* grid: # | style | size | QTY | product | std cases | total cases | ×  */
+  .product-line {
+    display: grid;
+    grid-template-columns: 28px 1fr 80px 100px 1fr 100px 110px 32px;
+    gap: 10px;
+    align-items: center;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    transition: border-color 0.15s;
+    animation: fadeIn 0.2s ease;
+  }
+  .product-line.has-data { border-color: rgba(245,166,35,0.2); }
+  .product-line.has-qty  { border-color: rgba(184,140,255,0.3); }
+
+  @keyframes fadeIn { from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:translateY(0);} }
+
+  .line-num { font-family: var(--mono); font-size: 11px; color: var(--text3); text-align: center; }
+
+  .line-select {
+    width: 100%; background: var(--bg); border: 1px solid var(--border-mid); border-radius: 6px;
+    color: var(--text); font-family: var(--mono); font-size: 12px; padding: 7px 10px;
+    appearance: none; -webkit-appearance: none; outline: none; transition: border-color 0.15s;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%235a6478'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 8px center; padding-right: 24px; cursor: pointer;
+  }
+  .line-select:focus { border-color: var(--accent); }
+  .line-select option { background: #1d2535; }
+
+  /* Quantity input — special styling */
+  .qty-wrap { position: relative; }
+  .qty-input {
+    width: 100%; background: var(--bg); border: 1px solid var(--border-mid); border-radius: 6px;
+    color: var(--purple); font-family: var(--mono); font-size: 13px; font-weight: 500;
+    padding: 7px 10px; outline: none; transition: border-color 0.15s;
+    text-align: center;
+  }
+  .qty-input:focus { border-color: var(--purple); }
+  .qty-input::placeholder { color: var(--text3); font-weight: 400; font-size: 11px; }
+  .qty-label-badge {
+    position: absolute; top: -7px; left: 50%; transform: translateX(-50%);
+    font-family: var(--mono); font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--purple); background: var(--bg3); padding: 0 4px; white-space: nowrap;
+  }
+
+  .line-stat { text-align: right; }
+  .line-stat-label { font-family: var(--mono); font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
+  .line-stat-value { font-family: var(--mono); font-size: 15px; font-weight: 500; color: var(--text2); }
+  .line-stat-value.active { color: var(--accent); }
+  .line-stat-value.qty-active { color: var(--purple); }
+  .line-stat-unit { font-family: var(--mono); font-size: 9px; color: var(--text3); margin-top: 1px; }
+
+  .remove-btn { background: none; border: 1px solid var(--border); border-radius: 6px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text3); font-size: 16px; line-height: 1; transition: border-color 0.15s, color 0.15s; padding: 0; }
+  .remove-btn:hover { border-color: var(--red); color: var(--red); }
+
+  .add-line-btn { display: flex; align-items: center; gap: 8px; background: none; border: 1px dashed var(--border-mid); border-radius: 8px; padding: 10px 16px; color: var(--text3); font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; width: 100%; transition: border-color 0.15s, color 0.15s; }
+  .add-line-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .add-line-btn span { font-size: 18px; line-height: 1; }
+
+  /* Column header labels */
+  .lines-header { display: grid; grid-template-columns: 28px 1fr 80px 100px 1fr 100px 110px 32px; gap: 10px; padding: 0 14px 8px; }
+  .lh { font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); text-align: right; }
+  .lh.left { text-align: left; }
+  .lh.purple { color: var(--purple); }
+
+  /* Qty legend pill */
+  .qty-legend { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 10px; color: var(--purple); background: rgba(184,140,255,0.08); border: 1px solid rgba(184,140,255,0.2); border-radius: 10px; padding: 3px 10px; }
+  .qty-legend::before { content:''; width:6px; height:6px; border-radius:50%; background: var(--purple); }
+
+  /* Summary table */
+  .summary-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12px; }
+  .summary-table thead th { text-align: left; padding: 9px 14px; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text3); border-bottom: 1px solid var(--border-mid); white-space: nowrap; }
+  .summary-table thead th.r { text-align: right; }
+  .summary-table thead th.purple { color: var(--purple); }
+  .summary-table tbody tr { border-bottom: 1px solid var(--border); }
+  .summary-table tbody tr:last-child { border-bottom: none; }
+  .summary-table tbody tr.total-row { border-top: 1px solid var(--border-mid); background: rgba(245,166,35,0.04); }
+  .summary-table tbody td { padding: 9px 14px; color: var(--text2); white-space: nowrap; }
+  .summary-table tbody td.r { text-align: right; }
+  .summary-table tbody td.accent { color: var(--accent); font-weight: 500; }
+  .summary-table tbody td.blue { color: var(--blue); font-weight: 500; }
+  .summary-table tbody td.purple { color: var(--purple); font-weight: 500; }
+  .summary-table tbody td.bold { color: var(--text); font-weight: 500; }
+
+  /* Totals bar */
+  .totals-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px,1fr)); gap: 10px; }
+  .total-card { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .total-card.primary { border-color: rgba(245,166,35,0.3); background: rgba(245,166,35,0.06); }
+  .total-card.blue-card { border-color: rgba(74,158,255,0.25); background: rgba(74,158,255,0.05); }
+  .total-card.purple-card { border-color: rgba(184,140,255,0.25); background: rgba(184,140,255,0.05); }
+  .tc-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text3); margin-bottom: 8px; }
+  .tc-value { font-family: var(--display); font-size: 34px; font-weight: 700; line-height: 1; color: var(--text); }
+  .total-card.primary .tc-value { color: var(--accent); }
+  .total-card.blue-card .tc-value { color: var(--blue); }
+  .total-card.purple-card .tc-value { color: var(--purple); }
+  .tc-unit { font-family: var(--mono); font-size: 10px; color: var(--text3); margin-top: 5px; }
+
+  /* Formulas */
+  .formula-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px,1fr)); gap: 8px; }
+  .formula-row { display: flex; align-items: baseline; gap: 10px; padding: 8px 10px; background: var(--bg3); border-radius: 6px; border: 1px solid var(--border); }
+  .formula-lhs { font-family: var(--mono); font-size: 10px; color: var(--text3); min-width: 145px; flex-shrink: 0; }
+  .formula-eq { font-family: var(--mono); font-size: 11px; color: var(--accent2); word-break: break-all; }
+
+  /* Reference table */
+  .ref-table-wrap { overflow-x: auto; }
+  .ref-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12px; }
+  .ref-table thead th { text-align: left; padding: 9px 14px; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text3); border-bottom: 1px solid var(--border-mid); white-space: nowrap; }
+  .ref-table tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  .ref-table tbody tr:last-child { border-bottom: none; }
+  .ref-table tbody tr:hover { background: rgba(255,255,255,0.025); }
+  .ref-table tbody td { padding: 8px 14px; color: var(--text2); white-space: nowrap; }
+  .td-right { text-align: right; }
+  .td-style { font-weight: 500; color: var(--text); }
+  .td-cases { color: var(--accent); font-weight: 500; }
+
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; letter-spacing: 0.04em; }
+  .badge-compact { background: rgba(74,158,255,0.12); color: #4a9eff; }
+  .badge-pilot   { background: rgba(62,207,142,0.12); color: #3ecf8e; }
+  .badge-cabin   { background: rgba(232,197,71,0.12); color: #e8c547; }
+  .badge-checkin { background: rgba(255,92,92,0.12);  color: #ff8c8c; }
+
+  @keyframes fadeUp { from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);} }
+  .panel { animation: fadeUp 0.35s ease both; }
+  .panel:nth-child(2){animation-delay:0.06s;}
+  .panel:nth-child(3){animation-delay:0.12s;}
+  .panel:nth-child(4){animation-delay:0.18s;}
+
+  .footer { margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+  .footer-text { font-family: var(--mono); font-size: 10px; color: var(--text3); letter-spacing: 0.06em; }
+  .footer-tag { font-family: var(--mono); font-size: 10px; color: var(--text3); padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; }
+
+  @media (max-width: 900px) {
+    .product-line { grid-template-columns: 24px 1fr 70px 80px; grid-template-rows: auto auto; }
+    .product-line > .line-stat { display: none; }
+    .lines-header { display: none; }
+  }
+  @media (max-width: 480px) { h1 { font-size: 30px; } }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="header">
+    <div>
+      <div class="eyebrow">// assembly line ops</div>
+      <h1>Production <span>Target</span> Calculator</h1>
+      <div class="header-meta">MULTI-LINE MODE &nbsp;·&nbsp; 7H SHIFT BASE &nbsp;·&nbsp; STD 10 PEOPLE</div>
+    </div>
+    <div class="status-pill">LIVE CALCULATOR</div>
+  </header>
+
+  <div class="main-grid">
+
+    <!-- SHIFT PARAMETERS -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-header-left">
+          <div class="panel-icon">
+            <svg viewBox="0 0 16 16"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 2a1 1 0 110 2 1 1 0 010-2zm1 9H7V7h2v5z"/></svg>
+          </div>
+          <span class="panel-title">Shift Parameters</span>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="shift-row">
+          <div class="field">
+            <label>Shift Hours</label>
+            <input type="number" id="inp-hours" value="7" min="1" max="24" step="0.5" oninput="recalcAll()">
+            <div class="field-hint">Standard = 7 hr</div>
+          </div>
+          <div class="field">
+            <label>People on Line</label>
+            <input type="number" id="inp-people" value="10" min="1" max="100" step="1" oninput="recalcAll()">
+            <div class="field-hint">Standard = 10</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRODUCT SELECTIONS -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-header-left">
+          <div class="panel-icon">
+            <svg viewBox="0 0 16 16"><path d="M2 3h12v2H2V3zm0 4h8v2H2V7zm0 4h6v2H2v-2z"/></svg>
+          </div>
+          <span class="panel-title">Product Selection</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span class="qty-legend">Qty = optional</span>
+          <span id="line-count-badge" style="font-family:var(--mono);font-size:10px;color:var(--text3);">0 lines</span>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="lines-header">
+          <div></div>
+          <div class="lh left">Style</div>
+          <div class="lh left">Size</div>
+          <div class="lh purple">Qty</div>
+          <div class="lh left">Product</div>
+          <div class="lh">Std Cases</div>
+          <div class="lh">Total Cases</div>
+          <div></div>
+        </div>
+        <div class="product-lines" id="product-lines"></div>
+        <button class="add-line-btn" onclick="addLine()" style="margin-top:10px;">
+          <span>+</span> Add Product Line
+        </button>
+      </div>
+    </div>
+
+    <!-- TOTALS SUMMARY -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-header-left">
+          <div class="panel-icon">
+            <svg viewBox="0 0 16 16"><path d="M1 11l4-4 3 3 4-5 3 3v4H1z"/></svg>
+          </div>
+          <span class="panel-title">Combined Targets Summary</span>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="totals-bar" style="margin-bottom:18px;">
+          <div class="total-card primary">
+            <div class="tc-label">Total Daily Cases</div>
+            <div class="tc-value" id="tot-daily">—</div>
+            <div class="tc-unit">all lines combined</div>
+          </div>
+          <div class="total-card">
+            <div class="tc-label">Total Hourly</div>
+            <div class="tc-value" id="tot-hourly">—</div>
+            <div class="tc-unit">cases / hour</div>
+          </div>
+          <div class="total-card purple-card">
+            <div class="tc-label">Total Qty Cases</div>
+            <div class="tc-value" id="tot-qty">—</div>
+            <div class="tc-unit">with quantities applied</div>
+          </div>
+          <div class="total-card blue-card">
+            <div class="tc-label">Staff Adj. Total</div>
+            <div class="tc-value" id="tot-staff">—</div>
+            <div class="tc-unit">with actual headcount</div>
+          </div>
+          <div class="total-card">
+            <div class="tc-label">Time Adj. Total</div>
+            <div class="tc-value" id="tot-time">—</div>
+            <div class="tc-unit">with actual shift hrs</div>
+          </div>
+        </div>
+
+        <div style="overflow-x:auto;">
+          <table class="summary-table">
+            <thead>
+              <tr>
+                <th>Line</th>
+                <th>Style</th>
+                <th>Size</th>
+                <th>Product</th>
+                <th class="r purple">Qty</th>
+                <th class="r">Std Cases</th>
+                <th class="r purple">Total Cases</th>
+                <th class="r">Cycle (min)</th>
+                <th class="r">Cycle (sec)</th>
+                <th class="r">Hourly</th>
+                <th class="r">Labor min/case</th>
+                <th class="r">Time Adj.</th>
+                <th class="r">Staff Adj.</th>
+              </tr>
+            </thead>
+            <tbody id="summary-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- FORMULAS -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-header-left">
+          <div class="panel-icon">
+            <svg viewBox="0 0 16 16"><path d="M3 2h10v1.5L9 8l4 4.5V14H3v-1.5L7 8 3 3.5V2z"/></svg>
+          </div>
+          <span class="panel-title">Formulas Reference</span>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="formula-grid">
+          <div class="formula-row"><span class="formula-lhs">Shift minutes</span><span class="formula-eq">= Hours × 60</span></div>
+          <div class="formula-row"><span class="formula-lhs">Cycle time (min)</span><span class="formula-eq">= Shift min ÷ Std cases</span></div>
+          <div class="formula-row"><span class="formula-lhs">Cycle time (sec)</span><span class="formula-eq">= Cycle min × 60</span></div>
+          <div class="formula-row"><span class="formula-lhs">Labor min/case</span><span class="formula-eq">= Cycle min × 10 ppl</span></div>
+          <div class="formula-row"><span class="formula-lhs">Adj. by time</span><span class="formula-eq">= Avail. min ÷ Cycle min</span></div>
+          <div class="formula-row"><span class="formula-lhs">Adj. by staffing</span><span class="formula-eq">= Std cases × Actual ÷ 10</span></div>
+          <div class="formula-row"><span class="formula-lhs" style="color:var(--purple)">Total qty cases</span><span class="formula-eq" style="color:var(--purple)">= Std cases × Qty (optional)</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- REFERENCE TABLE -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-header-left">
+          <div class="panel-icon">
+            <svg viewBox="0 0 16 16"><path d="M1 2h14v3H1V2zm0 4h14v3H1V6zm0 4h14v3H1v-3z"/></svg>
+          </div>
+          <span class="panel-title">Reference Lookup Table</span>
+        </div>
+      </div>
+      <div class="panel-body" style="padding:0;">
+        <div class="ref-table-wrap">
+          <table class="ref-table">
+            <thead>
+              <tr>
+                <th>Style</th>
+                <th>Size</th>
+                <th>Retail Name</th>
+                <th class="td-right">Std Cases / 7h</th>
+                <th class="td-right">Cycle (sec)</th>
+                <th class="td-right">Hourly</th>
+              </tr>
+            </thead>
+            <tbody id="ref-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer class="footer">
+    <div class="footer-text">ASSEMBLY LINE PRODUCTION TARGET CALCULATOR &nbsp;·&nbsp; MULTI-LINE + QTY MODE &nbsp;·&nbsp; REV 3.0</div>
+    <div class="footer-tag">2026</div>
+  </footer>
+</div>
+
+<script>
+const DATA = [
+  { style:'SLV', size:40,  name:'Compact',    cases:140 },
+  { style:'SIL', size:40,  name:'Compact',    cases:75  },
+  { style:'T2',  size:40,  name:'Compact',    cases:75  },
+  { style:'BLA', size:40,  name:'Compact',    cases:75  },
+  { style:'SIL', size:51,  name:'Pilot',      cases:85  },
+  { style:'T2',  size:51,  name:'Pilot',      cases:80  },
+  { style:'BLA', size:51,  name:'Pilot',      cases:80  },
+  { style:'LIT', size:52,  name:'Cabin S',    cases:186 },
+  { style:'ESS', size:53,  name:'Cabin',      cases:160 },
+  { style:'LIT', size:53,  name:'Cabin',      cases:186 },
+  { style:'ESS', size:63,  name:'Check In M', cases:150 },
+  { style:'LIT', size:63,  name:'Check In M', cases:155 },
+  { style:'ESS', size:73,  name:'Check in L', cases:145 },
+  { style:'LIT', size:73,  name:'Check in L', cases:155 },
+];
+
+const BADGE_MAP = {
+  'Compact':'badge-compact','Pilot':'badge-pilot',
+  'Cabin S':'badge-cabin','Cabin':'badge-cabin',
+  'Check In M':'badge-checkin','Check in L':'badge-checkin'
+};
+const STYLES = [...new Set(DATA.map(d => d.style))];
+
+let lineCounter = 0;
+let lines = [];
+
+function fmt(n, dec) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  const r = dec === 0 ? Math.round(n) : parseFloat(n.toFixed(dec));
+  return r.toLocaleString('en-US', { maximumFractionDigits: dec });
+}
+
+function getShiftParams() {
+  const hours  = parseFloat(document.getElementById('inp-hours').value) || 7;
+  const people = parseInt(document.getElementById('inp-people').value) || 10;
+  return { hours, people };
+}
+
+function buildStyleSelect(id) {
+  const sel = document.createElement('select');
+  sel.className = 'line-select';
+  sel.id = 'style-' + id;
+  const blank = document.createElement('option');
+  blank.value = ''; blank.textContent = '— style —';
+  sel.appendChild(blank);
+  STYLES.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s; o.textContent = s;
+    sel.appendChild(o);
+  });
+  sel.onchange = () => onLineStyleChange(id);
+  return sel;
+}
+
+function buildSizeSelect(id) {
+  const sel = document.createElement('select');
+  sel.className = 'line-select';
+  sel.id = 'size-' + id;
+  const blank = document.createElement('option');
+  blank.value = ''; blank.textContent = '— size —';
+  sel.appendChild(blank);
+  sel.onchange = () => recalcAll();
+  return sel;
+}
+
+function buildQtyInput(id) {
+  const wrap = document.createElement('div');
+  wrap.className = 'qty-wrap';
+  const badge = document.createElement('div');
+  badge.className = 'qty-label-badge';
+  badge.textContent = 'qty';
+  const inp = document.createElement('input');
+  inp.type = 'number';
+  inp.className = 'qty-input';
+  inp.id = 'qty-' + id;
+  inp.min = 1;
+  inp.step = 1;
+  inp.placeholder = 'opt.';
+  inp.title = 'Optional quantity multiplier';
+  inp.oninput = () => recalcAll();
+  wrap.appendChild(badge);
+  wrap.appendChild(inp);
+  return wrap;
+}
+
+function onLineStyleChange(id) {
+  const style = document.getElementById('style-' + id).value;
+  const sizeSel = document.getElementById('size-' + id);
+  sizeSel.innerHTML = '';
+  const blank = document.createElement('option');
+  blank.value = ''; blank.textContent = '— size —';
+  sizeSel.appendChild(blank);
+  if (style) {
+    const sizes = [...new Set(DATA.filter(d => d.style === style).map(d => d.size))].sort((a,b) => a-b);
+    sizes.forEach(s => {
+      const o = document.createElement('option');
+      o.value = s; o.textContent = s;
+      sizeSel.appendChild(o);
+    });
+    if (sizes.length === 1) sizeSel.value = sizes[0];
+  }
+  recalcAll();
+}
+
+function addLine(preStyle, preSize) {
+  lineCounter++;
+  const id = lineCounter;
+
+  const div = document.createElement('div');
+  div.className = 'product-line';
+  div.id = 'line-' + id;
+
+  // #
+  const numEl = document.createElement('div');
+  numEl.className = 'line-num';
+  numEl.textContent = '#' + id;
+
+  const styleSel = buildStyleSelect(id);
+  const sizeSel  = buildSizeSelect(id);
+  const qtyWrap  = buildQtyInput(id);
+
+  // Product name
+  const nameDiv = document.createElement('div');
+  nameDiv.className = 'line-stat';
+  nameDiv.innerHTML = `<div class="line-stat-label">Product</div><div class="line-stat-value" id="pname-${id}">—</div>`;
+
+  // Std cases per shift
+  const casesDiv = document.createElement('div');
+  casesDiv.className = 'line-stat';
+  casesDiv.innerHTML = `<div class="line-stat-label">Std Cases</div><div class="line-stat-value" id="pcases-${id}">—</div><div class="line-stat-unit">/ 7h shift</div>`;
+
+  // Total cases (std × qty if set)
+  const totalDiv = document.createElement('div');
+  totalDiv.className = 'line-stat';
+  totalDiv.innerHTML = `<div class="line-stat-label">Total Cases</div><div class="line-stat-value" id="ptotal-${id}">—</div><div class="line-stat-unit" id="ptotal-unit-${id}">cases</div>`;
+
+  // Remove
+  const removeBtn = document.createElement('button');
+  removeBtn.className = 'remove-btn';
+  removeBtn.innerHTML = '×';
+  removeBtn.title = 'Remove line';
+  removeBtn.onclick = () => removeLine(id);
+
+  div.appendChild(numEl);
+  div.appendChild(styleSel);
+  div.appendChild(sizeSel);
+  div.appendChild(qtyWrap);
+  div.appendChild(nameDiv);
+  div.appendChild(casesDiv);
+  div.appendChild(totalDiv);
+  div.appendChild(removeBtn);
+
+  document.getElementById('product-lines').appendChild(div);
+  lines.push({ id });
+
+  if (preStyle) {
+    styleSel.value = preStyle;
+    onLineStyleChange(id);
+    if (preSize) {
+      setTimeout(() => {
+        document.getElementById('size-' + id).value = preSize;
+        recalcAll();
+      }, 0);
+    }
+  } else {
+    recalcAll();
+  }
+}
+
+function removeLine(id) {
+  const el = document.getElementById('line-' + id);
+  if (el) el.remove();
+  lines = lines.filter(l => l.id !== id);
+  recalcAll();
+}
+
+function getLineData(id) {
+  const styleEl = document.getElementById('style-' + id);
+  const sizeEl  = document.getElementById('size-'  + id);
+  if (!styleEl || !sizeEl) return null;
+  const style = styleEl.value;
+  const size  = parseInt(sizeEl.value);
+  if (!style || !size) return null;
+  return DATA.find(d => d.style === style && d.size === size) || null;
+}
+
+function getQty(id) {
+  const el = document.getElementById('qty-' + id);
+  if (!el || el.value === '' || el.value === null) return null;
+  const v = parseInt(el.value);
+  return (isFinite(v) && v >= 1) ? v : null;
+}
+
+function recalcAll() {
+  const { hours, people } = getShiftParams();
+  const shiftMin = hours * 60;
+
+  let totalStd      = 0;
+  let totalQtyCases = 0;
+  let totalAdjTime  = 0;
+  let totalAdjStaff = 0;
+  let activeLines   = 0;
+  let anyQty        = false;
+
+  const tbody = document.getElementById('summary-tbody');
+  tbody.innerHTML = '';
+
+  lines.forEach(line => {
+    const row = getLineData(line.id);
+    const qty = getQty(line.id);
+    const lineDiv  = document.getElementById('line-'       + line.id);
+    const pname    = document.getElementById('pname-'      + line.id);
+    const pcases   = document.getElementById('pcases-'     + line.id);
+    const ptotal   = document.getElementById('ptotal-'     + line.id);
+    const ptotalU  = document.getElementById('ptotal-unit-'+ line.id);
+
+    if (!row) {
+      if (lineDiv) { lineDiv.classList.remove('has-data','has-qty'); }
+      if (pname)  { pname.textContent = '—'; pname.classList.remove('active','qty-active'); }
+      if (pcases) { pcases.textContent = '—'; pcases.classList.remove('active','qty-active'); }
+      if (ptotal) { ptotal.textContent = '—'; ptotal.classList.remove('active','qty-active'); }
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td class="bold">#${line.id}</td><td colspan="12" style="color:var(--text3);font-size:11px;">— not selected —</td>`;
+      tbody.appendChild(tr);
+      return;
+    }
+
+    const stdCases  = row.cases;
+    const cycleMin  = shiftMin / stdCases;
+    const cycleSec  = cycleMin * 60;
+    const laborMin  = cycleMin * 10;
+    const hourly    = stdCases / hours;
+    const adjTime   = shiftMin / cycleMin; // = stdCases (sanity check)
+    const adjStaff  = stdCases * people / 10;
+    const totalCases = qty !== null ? stdCases * qty : stdCases;
+
+    totalStd      += stdCases;
+    totalQtyCases += totalCases;
+    totalAdjTime  += adjTime;
+    totalAdjStaff += adjStaff;
+    activeLines++;
+    if (qty !== null) anyQty = true;
+
+    // Update line row styling
+    if (lineDiv) {
+      lineDiv.classList.add('has-data');
+      lineDiv.classList.toggle('has-qty', qty !== null);
+    }
+    if (pname)  { pname.textContent = row.name; pname.classList.add('active'); }
+    if (pcases) { pcases.textContent = fmt(stdCases, 0); pcases.classList.add('active'); }
+    if (ptotal) {
+      ptotal.textContent = fmt(totalCases, 0);
+      if (qty !== null) {
+        ptotal.classList.add('qty-active');
+        ptotal.classList.remove('active');
+        if (ptotalU) ptotalU.textContent = '× ' + qty + ' = ' + fmt(totalCases,0);
+      } else {
+        ptotal.classList.add('active');
+        ptotal.classList.remove('qty-active');
+        if (ptotalU) ptotalU.textContent = 'cases';
+      }
+    }
+
+    const badgeCls = BADGE_MAP[row.name] || '';
+    const qtyCell  = qty !== null
+      ? `<span style="color:var(--purple);font-weight:500">×${qty}</span>`
+      : `<span style="color:var(--text3)">—</span>`;
+    const totalCell = qty !== null
+      ? `<td class="r purple">${fmt(totalCases,0)}</td>`
+      : `<td class="r accent">${fmt(stdCases,0)}</td>`;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="bold">#${line.id}</td>
+      <td class="bold">${row.style}</td>
+      <td>${row.size}</td>
+      <td><span class="badge ${badgeCls}">${row.name}</span></td>
+      <td class="r">${qtyCell}</td>
+      <td class="r accent">${fmt(stdCases,0)}</td>
+      ${totalCell}
+      <td class="r">${fmt(cycleMin,2)}</td>
+      <td class="r">${fmt(cycleSec,1)}s</td>
+      <td class="r">${fmt(hourly,1)}</td>
+      <td class="r">${fmt(laborMin,2)}</td>
+      <td class="r blue">${fmt(adjTime,0)}</td>
+      <td class="r blue">${fmt(adjStaff,0)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // Totals row in summary table
+  if (activeLines > 1) {
+    const tr = document.createElement('tr');
+    tr.className = 'total-row';
+    const qtyTotalCell = anyQty
+      ? `<td class="r purple bold">${fmt(totalQtyCases,0)}</td>`
+      : `<td class="r" style="color:var(--text3)">—</td>`;
+    tr.innerHTML = `
+      <td colspan="4" class="bold" style="color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.08em;">Total (${activeLines} lines)</td>
+      <td class="r" style="color:var(--text3)">—</td>
+      <td class="r accent bold">${fmt(totalStd,0)}</td>
+      ${qtyTotalCell}
+      <td class="r">—</td><td class="r">—</td>
+      <td class="r bold">${fmt(totalStd/hours,1)}</td>
+      <td class="r">—</td>
+      <td class="r blue bold">${fmt(totalAdjTime,0)}</td>
+      <td class="r blue bold">${fmt(totalAdjStaff,0)}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  // Totals bar
+  const d = activeLines > 0;
+  document.getElementById('tot-daily').textContent  = d ? fmt(totalStd,0)          : '—';
+  document.getElementById('tot-hourly').textContent = d ? fmt(totalStd/hours,1)    : '—';
+  document.getElementById('tot-qty').textContent    = anyQty ? fmt(totalQtyCases,0): '—';
+  document.getElementById('tot-staff').textContent  = d ? fmt(totalAdjStaff,0)     : '—';
+  document.getElementById('tot-time').textContent   = d ? fmt(totalAdjTime,0)      : '—';
+
+  document.getElementById('line-count-badge').textContent = lines.length + ' line' + (lines.length !== 1 ? 's' : '');
+}
+
+function buildRefTable() {
+  const tbody = document.getElementById('ref-tbody');
+  DATA.forEach(d => {
+    const cycSec = ((7*60)/d.cases*60).toFixed(1);
+    const hourly = (d.cases/7).toFixed(1);
+    const badgeCls = BADGE_MAP[d.name] || '';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="td-style">${d.style}</td>
+      <td>${d.size}</td>
+      <td><span class="badge ${badgeCls}">${d.name}</span></td>
+      <td class="td-right td-cases">${d.cases}</td>
+      <td class="td-right" style="color:var(--text3)">${cycSec}s</td>
+      <td class="td-right" style="color:var(--text2)">${hourly}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+buildRefTable();
+addLine();
+addLine();
+</script>
+</body>
+</html>
