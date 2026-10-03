@@ -33,4 +33,4 @@ I build production, capacity and planning tools around your real product catalog
 
 **Reach out → [zov911.com](https://zov911.com)**
 
-© 2026 zov911. All rights reserved.
+© zov911. All rights reserved.
